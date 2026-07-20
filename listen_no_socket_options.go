@@ -4,7 +4,6 @@
 package dns
 
 import (
-	"fmt"
 	"net"
 )
 
@@ -14,27 +13,15 @@ const (
 )
 
 func listenTCP(network, addr string, reuseport, reuseaddr bool) (net.Listener, error) {
-	if reuseport || reuseaddr {
-		// TODO(tmthrgd): return an error?
-	}
-
-	return net.Listen(network, addr)
+	_ = "STUB: not implemented"
+	return *new(net.Listener), nil
 }
 
 func listenUDP(network, addr string, reuseport, reuseaddr bool) (net.PacketConn, error) {
-	if reuseport || reuseaddr {
-		// TODO(tmthrgd): return an error?
-	}
-
-	return net.ListenPacket(network, addr)
+	_ = "STUB: not implemented"
+	return *new(net.PacketConn), nil
 }
 
-// this is just for test compatibility
-func checkReuseport(fd uintptr) (bool, error) {
-	return false, fmt.Errorf("not supported")
-}
+func checkReuseport(fd uintptr) (bool, error) { _ = "STUB: not implemented"; return false, nil }
 
-// this is just for test compatibility
-func checkReuseaddr(fd uintptr) (bool, error) {
-	return false, fmt.Errorf("not supported")
-}
+func checkReuseaddr(fd uintptr) (bool, error) { _ = "STUB: not implemented"; return false, nil }

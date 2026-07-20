@@ -1,11 +1,6 @@
 //go:build ignore
 // +build ignore
 
-// types_generate.go is meant to run with go generate. It will use
-// go/{importer,types} to track down all the RR struct types. Then for each type
-// it will generate conversion tables (TypeToRR and TypeToString) and banal
-// methods (len, Header, copy) based on the struct tags. The generated source is
-// written to ztypes.go, and is meant to be checked into git.
 package main
 
 import (
@@ -15,8 +10,6 @@ import (
 	"go/types"
 	"log"
 	"os"
-
-	"golang.org/x/tools/go/packages"
 )
 
 var packageHdr = `
@@ -27,40 +20,18 @@ package dns
 `
 
 func getTypeStruct(t types.Type, scope *types.Scope) (*types.Struct, bool) {
-	st, ok := t.Underlying().(*types.Struct)
-	if !ok {
-		return nil, false
-	}
-	if st.NumFields() == 0 {
-		return nil, false
-	}
-	if st.Field(0).Type() == scope.Lookup("RR_Header").Type() {
-		return st, false
-	}
-	if st.Field(0).Anonymous() {
-		st, _ := getTypeStruct(st.Field(0).Type(), scope)
-		return st, true
-	}
+	_ = "STUB: not implemented"
 	return nil, false
 }
 
-// loadModule retrieves package description for a given module.
-func loadModule(name string) (*types.Package, error) {
-	conf := packages.Config{Mode: packages.NeedTypes | packages.NeedTypesInfo}
-	pkgs, err := packages.Load(&conf, name)
-	if err != nil {
-		return nil, err
-	}
-	return pkgs[0].Types, nil
-}
+func loadModule(name string) (*types.Package, error) { _ = "STUB: not implemented"; return nil, nil }
 
 func main() {
-	// Import and type-check the package
+
 	pkg, err := loadModule("github.com/miekg/dns")
 	fatalIfErr(err)
 	scope := pkg.Scope()
 
-	// Collect actual types (*X)
 	var namedTypes []string
 	for _, name := range scope.Names() {
 		o := scope.Lookup(name)
@@ -82,7 +53,6 @@ func main() {
 	b := &bytes.Buffer{}
 	b.WriteString(packageHdr)
 
-	// Generate the duplicate check for each type.
 	fmt.Fprint(b, "// isDuplicate() functions\n\n")
 	for _, name := range namedTypes {
 
@@ -97,8 +67,6 @@ func main() {
 			o2 := func(s string) { fmt.Fprintf(b, s+"\n", field, field) }
 			o3 := func(s string) { fmt.Fprintf(b, s+"\n", field, field, field) }
 
-			// For some reason, a and aaaa don't pop up as *types.Slice here (mostly like because the are
-			// *indirectly* defined as a slice in the net package).
 			if _, ok := st.Field(i).Type().(*types.Slice); ok {
 				o2("if len(r1.%s) != len(r2.%s) {\nreturn false\n}")
 
@@ -141,7 +109,7 @@ func main() {
 
 			switch st.Tag(i) {
 			case `dns:"-"`:
-				// ignored
+
 			case `dns:"a"`, `dns:"aaaa"`:
 				o2("if !r1.%s.Equal(r2.%s) {\nreturn false\n}")
 			case `dns:"cdomain-name"`, `dns:"domain-name"`:
@@ -165,22 +133,16 @@ func main() {
 		fmt.Fprint(b, "return true\n}\n\n")
 	}
 
-	// gofmt
 	res, err := format.Source(b.Bytes())
 	if err != nil {
 		b.WriteTo(os.Stderr)
 		log.Fatal(err)
 	}
 
-	// write result
 	f, err := os.Create("zduplicate.go")
 	fatalIfErr(err)
 	defer f.Close()
 	f.Write(res)
 }
 
-func fatalIfErr(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+func fatalIfErr(err error) { _ = "STUB: not implemented"; return }

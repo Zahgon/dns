@@ -1,11 +1,6 @@
 //go:build ignore
 // +build ignore
 
-// types_generate.go is meant to run with go generate. It will use
-// go/{importer,types} to track down all the RR struct types. Then for each type
-// it will generate conversion tables (TypeToRR and TypeToString) and banal
-// methods (len, Header, copy) based on the struct tags. The generated source is
-// written to ztypes.go, and is meant to be checked into git.
 package main
 
 import (
@@ -17,8 +12,6 @@ import (
 	"os"
 	"strings"
 	"text/template"
-
-	"golang.org/x/tools/go/packages"
 )
 
 var skipLen = map[string]struct{}{
@@ -63,46 +56,19 @@ var headerFunc = template.Must(template.New("headerFunc").Parse(`
 
 `))
 
-// getTypeStruct will take a type and the package scope, and return the
-// (innermost) struct if the type is considered a RR type (currently defined as
-// those structs beginning with a RR_Header, could be redefined as implementing
-// the RR interface). The bool return value indicates if embedded structs were
-// resolved.
 func getTypeStruct(t types.Type, scope *types.Scope) (*types.Struct, bool) {
-	st, ok := t.Underlying().(*types.Struct)
-	if !ok {
-		return nil, false
-	}
-	if st.NumFields() == 0 {
-		return nil, false
-	}
-	if st.Field(0).Type() == scope.Lookup("RR_Header").Type() {
-		return st, false
-	}
-	if st.Field(0).Anonymous() {
-		st, _ := getTypeStruct(st.Field(0).Type(), scope)
-		return st, true
-	}
+	_ = "STUB: not implemented"
 	return nil, false
 }
 
-// loadModule retrieves package description for a given module.
-func loadModule(name string) (*types.Package, error) {
-	conf := packages.Config{Mode: packages.NeedTypes | packages.NeedTypesInfo}
-	pkgs, err := packages.Load(&conf, name)
-	if err != nil {
-		return nil, err
-	}
-	return pkgs[0].Types, nil
-}
+func loadModule(name string) (*types.Package, error) { _ = "STUB: not implemented"; return nil, nil }
 
 func main() {
-	// Import and type-check the package
+
 	pkg, err := loadModule("github.com/miekg/dns")
 	fatalIfErr(err)
 	scope := pkg.Scope()
 
-	// Collect constants like TypeX
 	var numberedTypes []string
 	for _, name := range scope.Names() {
 		o := scope.Lookup(name)
@@ -123,7 +89,6 @@ func main() {
 		numberedTypes = append(numberedTypes, name)
 	}
 
-	// Collect actual types (*X)
 	var namedTypes []string
 	for _, name := range scope.Names() {
 		o := scope.Lookup(name)
@@ -137,7 +102,6 @@ func main() {
 			continue
 		}
 
-		// Check if corresponding TypeX exists
 		if scope.Lookup("Type"+o.Name()) == nil && o.Name() != "RFC3597" {
 			log.Fatalf("Constant Type%s does not exist.", o.Name())
 		}
@@ -148,16 +112,12 @@ func main() {
 	b := &bytes.Buffer{}
 	b.WriteString(packageHdr)
 
-	// Generate TypeToRR
 	fatalIfErr(TypeToRR.Execute(b, namedTypes))
 
-	// Generate typeToString
 	fatalIfErr(typeToString.Execute(b, numberedTypes))
 
-	// Generate headerFunc
 	fatalIfErr(headerFunc.Execute(b, namedTypes))
 
-	// Generate len()
 	fmt.Fprint(b, "// len() functions\n")
 	for _, name := range namedTypes {
 		if _, ok := skipLen[name]; ok {
@@ -176,7 +136,7 @@ func main() {
 			if _, ok := st.Field(i).Type().(*types.Slice); ok {
 				switch st.Tag(i) {
 				case `dns:"-"`:
-					// ignored
+
 				case `dns:"cdomain-name"`:
 					o("for _, x := range rr.%s { l += domainNameLen(x, off+l, compression, true) }\n")
 				case `dns:"domain-name"`:
@@ -195,7 +155,7 @@ func main() {
 
 			switch {
 			case st.Tag(i) == `dns:"-"`:
-				// ignored
+
 			case st.Tag(i) == `dns:"cdomain-name"`:
 				o("l += domainNameLen(rr.%s, off+l, compression, true)\n")
 			case st.Tag(i) == `dns:"domain-name"`:
@@ -206,7 +166,7 @@ func main() {
 				fallthrough
 			case st.Tag(i) == `dns:"base64"`:
 				o("l += base64.StdEncoding.DecodedLen(len(rr.%s))\n")
-			case strings.HasPrefix(st.Tag(i), `dns:"size-hex:`): // this has an extra field where the length is stored
+			case strings.HasPrefix(st.Tag(i), `dns:"size-hex:`):
 				o("l += len(rr.%s)/2\n")
 			case st.Tag(i) == `dns:"hex"`:
 				o("l += len(rr.%s)/2\n")
@@ -264,7 +224,6 @@ func main() {
 		fmt.Fprint(b, "return l }\n\n")
 	}
 
-	// Generate copy()
 	fmt.Fprint(b, "// copy() functions\n")
 	for _, name := range namedTypes {
 		o := scope.Lookup(name)
@@ -286,7 +245,7 @@ func main() {
 				if idx := strings.LastIndex(t, "."); idx >= 0 {
 					t = t[idx+1:]
 				}
-				// For the EDNS0 interface (and others), we need to call the copy method on each element.
+
 				if t == "EDNS0" || t == "APLPrefix" || t == "SVCBKeyValue" {
 					fmt.Fprintf(b, "%s := make([]%s, len(rr.%s));\nfor i,e := range rr.%s {\n %s[i] = e.copy()\n}\n",
 						f, t, f, f, f)
@@ -311,22 +270,16 @@ func main() {
 		fmt.Fprint(b, "}\n\n")
 	}
 
-	// gofmt
 	res, err := format.Source(b.Bytes())
 	if err != nil {
 		b.WriteTo(os.Stderr)
 		log.Fatal(err)
 	}
 
-	// write result
 	f, err := os.Create("ztypes.go")
 	fatalIfErr(err)
 	defer f.Close()
 	f.Write(res)
 }
 
-func fatalIfErr(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+func fatalIfErr(err error) { _ = "STUB: not implemented"; return }
