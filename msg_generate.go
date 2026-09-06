@@ -1,10 +1,6 @@
 //go:build ignore
 // +build ignore
 
-// msg_generate.go is meant to run with go generate. It will use
-// go/{importer,types} to track down all the RR struct types. Then for each type
-// it will generate pack/unpack methods based on the struct tags. The generated source is
-// written to zmsg.go, and is meant to be checked into git.
 package main
 
 import (
@@ -15,8 +11,6 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"golang.org/x/tools/go/packages"
 )
 
 var packageHdr = `
@@ -27,46 +21,19 @@ package dns
 import "fmt"
 `
 
-// getTypeStruct will take a type and the package scope, and return the
-// (innermost) struct if the type is considered a RR type (currently defined as
-// those structs beginning with a RR_Header, could be redefined as implementing
-// the RR interface). The bool return value indicates if embedded structs were
-// resolved.
 func getTypeStruct(t types.Type, scope *types.Scope) (*types.Struct, bool) {
-	st, ok := t.Underlying().(*types.Struct)
-	if !ok {
-		return nil, false
-	}
-	if st.NumFields() == 0 {
-		return nil, false
-	}
-	if st.Field(0).Type() == scope.Lookup("RR_Header").Type() {
-		return st, false
-	}
-	if st.Field(0).Anonymous() {
-		st, _ := getTypeStruct(st.Field(0).Type(), scope)
-		return st, true
-	}
+	_ = "STUB: not implemented"
 	return nil, false
 }
 
-// loadModule retrieves package description for a given module.
-func loadModule(name string) (*types.Package, error) {
-	conf := packages.Config{Mode: packages.NeedTypes | packages.NeedTypesInfo}
-	pkgs, err := packages.Load(&conf, name)
-	if err != nil {
-		return nil, err
-	}
-	return pkgs[0].Types, nil
-}
+func loadModule(name string) (*types.Package, error) { _ = "STUB: not implemented"; return nil, nil }
 
 func main() {
-	// Import and type-check the package
+
 	pkg, err := loadModule("github.com/miekg/dns")
 	fatalIfErr(err)
 	scope := pkg.Scope()
 
-	// Collect actual types (*X)
 	var namedTypes []string
 	for _, name := range scope.Names() {
 		o := scope.Lookup(name)
@@ -80,7 +47,6 @@ func main() {
 			continue
 		}
 
-		// Check if corresponding TypeX exists
 		if scope.Lookup("Type"+o.Name()) == nil && o.Name() != "RFC3597" {
 			log.Fatalf("Constant Type%s does not exist.", o.Name())
 		}
@@ -108,7 +74,7 @@ return off, err
 
 			if _, ok := st.Field(i).Type().(*types.Slice); ok {
 				switch st.Tag(i) {
-				case `dns:"-"`: // ignored
+				case `dns:"-"`:
 				case `dns:"txt"`:
 					o("off, err = packStringTxt(rr.%s, msg, off)\n")
 				case `dns:"opt"`:
@@ -128,7 +94,7 @@ return off, err
 			}
 
 			switch {
-			case st.Tag(i) == `dns:"-"`: // ignored
+			case st.Tag(i) == `dns:"-"`:
 			case st.Tag(i) == `dns:"cdomain-name"`:
 				o("off, err = packDomainName(rr.%s, msg, off, compression, compress)\n")
 			case st.Tag(i) == `dns:"domain-name"`:
@@ -142,18 +108,18 @@ return off, err
 			case st.Tag(i) == `dns:"txt"`:
 				o("off, err = packString(rr.%s, msg, off)\n")
 
-			case strings.HasPrefix(st.Tag(i), `dns:"size-base32`): // size-base32 can be packed just like base32
+			case strings.HasPrefix(st.Tag(i), `dns:"size-base32`):
 				fallthrough
 			case st.Tag(i) == `dns:"base32"`:
 				o("off, err = packStringBase32(rr.%s, msg, off)\n")
 
-			case strings.HasPrefix(st.Tag(i), `dns:"size-base64`): // size-base64 can be packed just like base64
+			case strings.HasPrefix(st.Tag(i), `dns:"size-base64`):
 				fallthrough
 			case st.Tag(i) == `dns:"base64"`:
 				o("off, err = packStringBase64(rr.%s, msg, off)\n")
 
 			case strings.HasPrefix(st.Tag(i), `dns:"size-hex:SaltLength`):
-				// directly write instead of using o() so we get the error check in the correct place
+
 				field := st.Field(i).Name()
 				fmt.Fprintf(b, `// Only pack salt if value is not "-", i.e. empty
 if rr.%s != "-" {
@@ -164,7 +130,7 @@ if rr.%s != "-" {
 }
 `, field, field)
 				continue
-			case strings.HasPrefix(st.Tag(i), `dns:"size-hex`): // size-hex can be packed just like hex
+			case strings.HasPrefix(st.Tag(i), `dns:"size-hex`):
 				fallthrough
 			case st.Tag(i) == `dns:"hex"`:
 				o("off, err = packStringHex(rr.%s, msg, off)\n")
@@ -220,7 +186,6 @@ return off, fmt.Errorf("%s: %%w", err)
 `, err_name)
 			}
 
-			// size-* are special, because they reference a struct member we should use for the length.
 			if strings.HasPrefix(st.Tag(i), `dns:"size-`) {
 				structMember := structMember(st.Tag(i))
 				structTag := structTag(st.Tag(i))
@@ -243,7 +208,7 @@ return off, err
 
 			if _, ok := st.Field(i).Type().(*types.Slice); ok {
 				switch st.Tag(i) {
-				case `dns:"-"`: // ignored
+				case `dns:"-"`:
 				case `dns:"txt"`:
 					o("rr.%s, off, err = unpackStringTxt(msg, off)\n")
 				case `dns:"opt"`:
@@ -263,7 +228,7 @@ return off, err
 			}
 
 			switch st.Tag(i) {
-			case `dns:"-"`: // ignored
+			case `dns:"-"`:
 			case `dns:"cdomain-name"`:
 				fallthrough
 			case `dns:"domain-name"`:
@@ -306,7 +271,7 @@ return off, err
 			default:
 				log.Fatalln(name, st.Field(i).Name(), st.Tag(i))
 			}
-			// If we've hit len(msg) we return without error.
+
 			if i < st.NumFields()-1 {
 				fmt.Fprint(b, `if off == len(msg) {
 return off, nil
@@ -317,35 +282,20 @@ return off, nil
 		fmt.Fprintf(b, "return off, nil }\n\n")
 	}
 
-	// gofmt
 	res, err := format.Source(b.Bytes())
 	if err != nil {
 		b.WriteTo(os.Stderr)
 		log.Fatal(err)
 	}
 
-	// write result
 	f, err := os.Create("zmsg.go")
 	fatalIfErr(err)
 	defer f.Close()
 	f.Write(res)
 }
 
-// structMember will take a tag like dns:"size-base32:SaltLength" and return the last part of this string.
-func structMember(s string) string {
-	idx := strings.LastIndex(s, ":")
-	return strings.TrimSuffix(s[idx+1:], `"`)
-}
+func structMember(s string) string { _ = "STUB: not implemented"; return "" }
 
-// structTag will take a tag like dns:"size-base32:SaltLength" and return base32.
-func structTag(s string) string {
-	s = strings.TrimPrefix(s, `dns:"size-`)
-	s, _, _ = strings.Cut(s, ":")
-	return s
-}
+func structTag(s string) string { _ = "STUB: not implemented"; return "" }
 
-func fatalIfErr(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+func fatalIfErr(err error) { _ = "STUB: not implemented"; return }
